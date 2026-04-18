@@ -13,15 +13,18 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet, _cacheHeaders) {
+          // NOTE: _cacheHeaders cannot be applied here — Server Components cannot
+          // mutate response headers in Next.js. The proxy applies cacheHeaders on
+          // the outgoing response for authenticated requests. See src/proxy.ts.
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
             );
           } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            // Called from a Server Component (read-only context) — safely ignore.
+            // The proxy has already refreshed the session via getClaims() before
+            // the request reaches any Server Component.
           }
         },
       },
