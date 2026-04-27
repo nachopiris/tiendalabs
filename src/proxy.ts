@@ -2,9 +2,10 @@
 //
 // 1. Session refresh via Supabase SSR on every request.
 //    createServerClient is bound to the request/response cookie store;
-//    getClaims() triggers a silent JWT refresh when the access token is near
-//    expiry. cacheHeaders returned by Supabase (e.g. Cache-Control: private,
-//    no-store) are applied to the response so CDNs never cache auth responses.
+//    getClaims() validates the JWT locally and triggers a silent refresh when
+//    the access token is expired or near expiry. cacheHeaders returned by
+//    Supabase (e.g. Cache-Control: private, no-store) are applied to the
+//    response so CDNs never cache auth responses.
 //
 // 2. x-store-slug injection is SKIPPED for /admin/* and /auth/* paths.
 //    Admin panel lives on the main domain, not a tenant subdomain. /auth/confirm
@@ -77,11 +78,20 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // 3. Refresh the session JWT via local validation (no network call to auth server).
-  //    If the access token is near expiry, Supabase SSR fetches a new one using the
-  //    refresh token and writes updated cookies via the setAll callback above.
-  //    If there is no session or the refresh token is expired, no cookies are written
-  //    and the request continues unmodified — the protected layout handles the redirect.
+  // 3. Refresh the session when needed. getClaims() validates the JWT locally
+  //    (signature + exp) and internally calls getSession(), which triggers a
+  //    refresh via the SSR storage adapter when the access token is expired or
+  //    near expiry. Updated cookies are written via setAll above.
+  //
+  //    Why not getUser(): getUser() round-trips to Supabase Auth on EVERY
+  //    request, even when the JWT is perfectly valid. Combined with Next.js
+  //    parallel prefetches, that creates multiple concurrent clients racing on
+  //    the same refresh token and tripping reuse detection — users returning
+  //    from idle tabs get silently logged out. getClaims() avoids the network
+  //    call when it isn't needed and keeps refreshes to one-at-a-time.
+  //
+  //    Identity verification (when you need a trusted user object) still belongs
+  //    in getUser() — use it in requireUser(), not here.
   await supabase.auth.getClaims();
 
   // 4. Multi-tenant slug logic — SKIP for /admin/* and /auth/* paths.
