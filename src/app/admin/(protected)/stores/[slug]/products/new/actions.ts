@@ -53,7 +53,7 @@ export async function createProduct(
     compare_at_price: formData.get("compare_at_price"),
     images: imagesRaw,
     variants: parsedVariants,
-    is_active: formData.get("is_active") ?? "false",
+    is_active: formData.get("is_active") === "true",
   });
 
   if (!result.success) {

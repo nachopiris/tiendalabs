@@ -40,7 +40,7 @@ export const productFormSchema = z
       .array(z.string().url("URL de imagen inválida"))
       .max(8, "No se pueden agregar más de 8 imágenes"),
     variants: productVariantsSchema,
-    is_active: z.coerce.boolean(),
+    is_active: z.boolean(),
   })
   .refine(
     (d) => d.compare_at_price === null || d.compare_at_price > d.price,
